@@ -29,11 +29,7 @@ contract MerkleAirdropTest is Test {
         gasPayer = makeAddr("gasPayer");
     }
 
-    function test_user() public {
-        console2.log("user", user);
-    }
-
-    function test_userCanClaim() public {
+    function test_userCanClaimAirdrop() public {
         uint256 startingBalance = token.balanceOf(user);
 
         bytes32 digest = airdrop.getMessageHash(user, AMOUNT_TO_CLAIM);
@@ -44,5 +40,40 @@ contract MerkleAirdropTest is Test {
 
         uint256 endingBalance = token.balanceOf(user);
         assertEq(endingBalance, startingBalance + AMOUNT_TO_CLAIM);
+    }
+
+    function test_userCannotClaimAirdropTwice() public {
+        test_userCanClaimAirdrop();
+
+        bytes32 digest = airdrop.getMessageHash(user, AMOUNT_TO_CLAIM);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, digest);
+
+        vm.expectRevert(MerkleAirdrop.MerkleAirdrop__AlreadyClaimed.selector);
+        airdrop.claim(user, AMOUNT_TO_CLAIM, PROOF, v, r, s);
+    }
+
+    function test_userCannotClaimAirdropWithInvalidSignature() public {
+        bytes32 digest = airdrop.getMessageHash(user, AMOUNT_TO_CLAIM);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, digest);
+
+        vm.expectRevert(MerkleAirdrop.MerkleAirdrop__InvalidSignature.selector);
+        airdrop.claim(user, AMOUNT_TO_CLAIM, PROOF, v + 1, r, s);
+    }
+
+    function test_userCannotClaimAirdropWithInvalidProof() public {
+        bytes32 digest = airdrop.getMessageHash(user, AMOUNT_TO_CLAIM);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, digest);
+
+        bytes32[] memory invalidProof = new bytes32[](2);
+        invalidProof[0] = 0x4fd31fee0e75780cd67704fbc43caee70fddcaa43631e2e1bc9fb233fada2394;
+        invalidProof[1] = 0x81f0e530b56872b6fc3e10f8873804230663f8407e21cef901b8aeb06a25e5e2;
+
+        vm.expectRevert(MerkleAirdrop.MerkleAirdrop__InvalidProof.selector);
+        airdrop.claim(user, AMOUNT_TO_CLAIM, invalidProof, v, r, s);
+    }
+
+    function test_getterFunctions() public view {
+        assertEq(airdrop.getMerkleRoot(), ROOT);
+        assertEq(address(airdrop.getAirdropToken()), address(token));
     }
 }
